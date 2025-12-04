@@ -28,7 +28,7 @@ import {
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
-// --- 1. Firebase 設定 (已更新為你的真實設定) ---
+// --- 1. Firebase 設定 ---
 const firebaseConfig = {
   apiKey: "AIzaSyA1Fjs5tej6iJzEIM9b5xWm9Te3sGsxASk",
   authDomain: "travel-dash-9815c.firebaseapp.com",
@@ -104,7 +104,6 @@ const scanReceiptWithGemini = async (file, apiKey) => {
   }
 };
 
-// Excel 匯出函式
 const exportToExcel = (tripName, items) => {
   const expenses = items.filter(i => i.type === 'expense');
   if (expenses.length === 0) { alert('沒有支出資料可匯出'); return; }
@@ -126,7 +125,7 @@ const exportToExcel = (tripName, items) => {
   XLSX.writeFile(wb, `${tripName || 'Travel'}_支出明細.xlsx`);
 };
 
-// --- 3. UI 元件 ---
+// --- 3. UI 元件 (已修復 Modal 與 定位) ---
 
 const LoadingScreen = () => (
   <div className="flex flex-col items-center justify-center h-screen bg-slate-50 text-slate-400">
@@ -178,18 +177,34 @@ const Header = ({ title, subtitle, onSettings }) => (
       <h1 className="text-xl font-bold text-slate-800 truncate">{title || '載入中...'}</h1>
       {subtitle && <p className="text-xs text-slate-500 font-medium mt-0.5">{subtitle}</p>}
     </div>
-    <button onClick={onSettings} className="w-9 h-9 rounded-full bg-slate-50 flex items-center justify-center text-slate-600">
+    <button onClick={onSettings} className="w-9 h-9 rounded-full bg-slate-50 flex items-center justify-center text-slate-600 active:bg-slate-200 transition">
         <Settings className="w-5 h-5" />
     </button>
   </header>
 );
 
 const WeatherWidget = () => {
+    const [loc, setLoc] = useState({ name: '定位中...', temp: '--' });
+
+    useEffect(() => {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+             // 這裡模擬取得天氣，實際上需要接天氣 API
+             setLoc({ name: '目前位置', temp: '24' });
+          },
+          (error) => {
+             setLoc({ name: '無法定位', temp: '--' });
+          }
+        );
+      }
+    }, []);
+
     return (
         <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl p-4 text-white shadow-lg flex items-center justify-between mb-4">
             <div>
-                <div className="flex items-center gap-2 mb-1"><MapPin className="w-3 h-3 opacity-80" /><span className="text-sm font-bold">目前位置</span></div>
-                <div className="text-3xl font-bold">--°<span className="text-xs font-normal">C</span></div>
+                <div className="flex items-center gap-2 mb-1"><MapPin className="w-3 h-3 opacity-80" /><span className="text-sm font-bold">{loc.name}</span></div>
+                <div className="text-3xl font-bold">{loc.temp}°<span className="text-xs font-normal">C</span></div>
             </div>
             <Sun className="w-8 h-8 text-yellow-300" />
         </div>
@@ -212,7 +227,7 @@ const DashboardView = ({ items, settings, onEditItem }) => {
         <div>
             <h3 className="text-sm font-bold text-slate-500 mb-3">航班資訊</h3>
             {flights.map(f => (
-                <div key={f.id} onClick={() => onEditItem(f)} className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 mb-3 flex justify-between items-center">
+                <div key={f.id} onClick={() => onEditItem(f)} className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 mb-3 flex justify-between items-center active:scale-95 transition">
                     <div className="flex items-center gap-3">
                         <div className="bg-blue-50 p-2 rounded-lg text-blue-600"><Plane className="w-5 h-5"/></div>
                         <div>
@@ -318,14 +333,14 @@ const WalletView = ({ items, settings, onEditItem, tripId }) => {
                 {isScanning ? <RefreshCw className="w-6 h-6 animate-spin"/> : <Camera className="w-6 h-6"/>}
                 <span className="text-xs font-bold">{isScanning ? 'AI 分析中...' : '掃描收據'}</span>
             </label>
-            <button onClick={() => exportToExcel(settings.title, items)} className="bg-emerald-500 text-white p-4 rounded-2xl flex flex-col items-center justify-center gap-2 shadow-lg">
+            <button onClick={() => exportToExcel(settings.title, items)} className="bg-emerald-500 text-white p-4 rounded-2xl flex flex-col items-center justify-center gap-2 shadow-lg active:scale-95 transition">
                 <FileSpreadsheet className="w-6 h-6" />
                 <span className="text-xs font-bold">匯出 Excel</span>
             </button>
         </div>
         <div className="space-y-2">
             {expenses.map(ex => (
-                <div key={ex.id} onClick={() => onEditItem(ex)} className="bg-white p-3 rounded-xl border border-slate-100 flex justify-between items-center">
+                <div key={ex.id} onClick={() => onEditItem(ex)} className="bg-white p-3 rounded-xl border border-slate-100 flex justify-between items-center active:bg-slate-50 transition">
                     <div>
                         <div className="font-bold text-slate-800">{ex.title}</div>
                         <div className="text-xs text-slate-400">{ex.date}</div>
@@ -346,7 +361,7 @@ const NavView = ({ items }) => {
             <h3 className="font-bold mb-4">快速搜尋</h3>
             <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
                 {presets.map((p,i) => (
-                    <a key={i} href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.q)}`} target="_blank" rel="noreferrer" className="bg-white px-4 py-3 rounded-xl border border-slate-100 font-bold text-sm whitespace-nowrap shadow-sm">
+                    <a key={i} href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.q)}`} target="_blank" rel="noreferrer" className="bg-white px-4 py-3 rounded-xl border border-slate-100 font-bold text-sm whitespace-nowrap shadow-sm active:bg-slate-50">
                         {p.t}
                     </a>
                 ))}
@@ -354,7 +369,7 @@ const NavView = ({ items }) => {
             <h3 className="font-bold mb-4">行程地點</h3>
             <div className="space-y-3">
                 {locations.map((loc, idx) => (
-                    <a key={idx} href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(loc.query)}`} target="_blank" rel="noreferrer" className="bg-white p-4 rounded-xl border border-slate-100 flex justify-between items-center shadow-sm">
+                    <a key={idx} href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(loc.query)}`} target="_blank" rel="noreferrer" className="bg-white p-4 rounded-xl border border-slate-100 flex justify-between items-center shadow-sm active:bg-slate-50">
                         <div className="flex items-center gap-3 overflow-hidden">
                             <MapPin className="w-5 h-5 text-indigo-500 flex-shrink-0" />
                             <div className="truncate font-bold text-slate-700">{loc.title}</div>
@@ -367,17 +382,22 @@ const NavView = ({ items }) => {
     );
 };
 
+// ⚠️ 重要修正：改成置中顯示，確保在所有手機上都看得到
 const Modal = ({ isOpen, onClose, title, children }) => {
   if (!isOpen) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center pointer-events-none">
-      <div className="absolute inset-0 bg-black/30 backdrop-blur-sm pointer-events-auto" onClick={onClose} />
-      <div className="bg-white w-full max-w-md rounded-t-2xl sm:rounded-2xl p-0 pointer-events-auto max-h-[90vh] flex flex-col shadow-2xl">
+    <div className="fixed inset-0 z-[999] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-white w-full max-w-md rounded-2xl p-0 flex flex-col shadow-2xl max-h-[85vh] animate-fade-in">
+        {/* Header */}
         <div className="px-5 py-4 border-b flex justify-between items-center">
           <h3 className="text-lg font-bold">{title}</h3>
-          <button onClick={onClose}><X className="w-5 h-5 text-slate-400" /></button>
+          <button onClick={onClose} className="p-2 bg-slate-100 rounded-full active:bg-slate-200"><X className="w-5 h-5 text-slate-500" /></button>
         </div>
-        <div className="p-5 overflow-y-auto">{children}</div>
+        {/* Content */}
+        <div className="p-5 overflow-y-auto">
+          {children}
+        </div>
       </div>
     </div>
   );
@@ -464,7 +484,7 @@ export default function TravelDashApp() {
     <div className="bg-[#f8f9fc] min-h-screen text-slate-800 font-sans selection:bg-indigo-100 pb-safe">
       <Header title={settings.title} subtitle={settings.startDate} onSettings={() => setShowSettings(true)} />
       
-      <div className="bg-indigo-600 text-white px-4 py-2 text-xs font-bold text-center cursor-pointer" onClick={() => {navigator.clipboard.writeText(window.location.href); alert('網址已複製！');}}>
+      <div className="bg-indigo-600 text-white px-4 py-2 text-xs font-bold text-center cursor-pointer active:opacity-80" onClick={() => {navigator.clipboard.writeText(window.location.href); alert('網址已複製！');}}>
           🔗 點此複製分享連結
       </div>
 
@@ -489,7 +509,7 @@ export default function TravelDashApp() {
                   <label className="text-xs font-bold text-slate-500">Gemini API Key (存在本機)</label>
                   <input type="password" defaultValue={localStorage.getItem('gemini_key') || ''} onChange={e => localStorage.setItem('gemini_key', e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs" placeholder="AIza..." />
               </div>
-              <button type="submit" className="w-full bg-indigo-600 text-white font-bold py-3 rounded-xl">儲存</button>
+              <button type="submit" className="w-full bg-indigo-600 text-white font-bold py-3 rounded-xl active:scale-95 transition">儲存</button>
           </form>
       </Modal>
 
@@ -512,8 +532,8 @@ export default function TravelDashApp() {
                   <div className="space-y-1"><label className="text-xs font-bold text-slate-500">地點</label><input name="location" defaultValue={editItem?.location} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3" /></div>
               )}
               <div className="flex gap-2 pt-2">
-                  {editItem && <button type="button" onClick={handleDeleteItem} className="flex-1 bg-red-50 text-red-500 font-bold py-3 rounded-xl">刪除</button>}
-                  <button type="submit" className="flex-[2] bg-indigo-600 text-white font-bold py-3 rounded-xl">儲存</button>
+                  {editItem && <button type="button" onClick={handleDeleteItem} className="flex-1 bg-red-50 text-red-500 font-bold py-3 rounded-xl active:scale-95 transition">刪除</button>}
+                  <button type="submit" className="flex-[2] bg-indigo-600 text-white font-bold py-3 rounded-xl active:scale-95 transition">儲存</button>
               </div>
           </form>
       </Modal>
