@@ -28,15 +28,15 @@ import {
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
-// --- 1. Firebase 設定 (請填入你的設定) ---
-// ⚠️ 請去 Firebase Console 複製你的設定覆蓋下方
+// --- 1. Firebase 設定 (已更新為你的真實設定) ---
 const firebaseConfig = {
-  apiKey: "你的_API_KEY",
-  authDomain: "你的_PROJECT_ID.firebaseapp.com",
-  projectId: "你的_PROJECT_ID",
-  storageBucket: "你的_PROJECT_ID.appspot.com",
-  messagingSenderId: "你的_SENDER_ID",
-  appId: "你的_APP_ID"
+  apiKey: "AIzaSyA1Fjs5tej6iJzEIM9b5xWm9Te3sGsxASk",
+  authDomain: "travel-dash-9815c.firebaseapp.com",
+  projectId: "travel-dash-9815c",
+  storageBucket: "travel-dash-9815c.firebasestorage.app",
+  messagingSenderId: "147395409268",
+  appId: "1:147395409268:web:828e5c49943845511f6821",
+  measurementId: "G-GF6Y4RP4S4"
 };
 
 // 初始化 Firebase
