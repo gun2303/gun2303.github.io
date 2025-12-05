@@ -6,7 +6,643 @@ import {
   signInAnonymously, 
   onAuthStateChanged 
 } from 'firebase/auth';
+import { import React, { useState, useEffect, useMemo } from 'react';
+import { initializeApp } from 'firebase/app';
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { 
+  getAuth, 
+  signInAnonymously, 
+  onAuthStateChanged 
+} from 'firebase/auth';
+import { 
+  getFirestore, 
+  collection, 
+  addDoc, 
+  query, 
+  orderBy, 
+  onSnapshot, 
+  deleteDoc, 
+  doc, 
+  serverTimestamp,
+  updateDoc,
+  setDoc
+} from 'firebase/firestore';
+import { 
+  Plane, MapPin, Plus, Navigation, Wallet, Calendar, 
+  X, Settings, Camera, RefreshCw, Sun, BedDouble, Train,
+  ArrowRight, Home, FileSpreadsheet, Share2, Locate, Utensils,
+  Languages, Map as MapIcon, ChevronRight
+} from 'lucide-react';
+import * as XLSX from 'xlsx';
+
+// --- 1. Firebase 設定 ---
+// 請確保這裡換成你自己的 Firebase Config
+const firebaseConfig = {
+  apiKey: "AIzaSyA1Fjs5tej6iJzEIM9b5xWm9Te3sGsxASk",
+  authDomain: "travel-dash-9815c.firebaseapp.com",
+  projectId: "travel-dash-9815c",
+  storageBucket: "travel-dash-9815c.firebasestorage.app",
+  messagingSenderId: "147395409268",
+  appId: "1:147395409268:web:828e5c49943845511f6821",
+  measurementId: "G-GF6Y4RP4S4"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const appId = 'travel-dash-v2'; // 更新版本號以區隔舊資料
+
+// --- 2. 工具函式 ---
+
+// 匯率設定 (可從 Settings 動態調整，這裡先寫死預設值)
+const DEFAULT_RATE = 0.215; 
+
+const formatDate = (dateStr) => {
+    if (!dateStr) return '';
+    const d = new Date(dateStr);
+    return `${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getDate().toString().padStart(2, '0')}`;
+};
+
+const getDayLabel = (index) => `D${index + 1}`;
+
+const generateDateRange = (start, end) => {
+    if (!start || !end) return [];
+    const dates = [];
+    let curr = new Date(start);
+    const last = new Date(end);
+    while (curr <= last) {
+        dates.push(curr.toISOString().split('T')[0]);
+        curr.setDate(curr.getDate() + 1);
+    }
+    return dates;
+};
+
+const scanReceiptWithGemini = async (file, apiKey) => {
+  if (!apiKey) throw new Error("請先點擊右上角設定，輸入 Gemini API Key");
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+  
+  const base64Data = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = error => reject(error);
+  });
+
+  try {
+    const prompt = `你是一個專業的會計助理。請分析這張收據圖片。辨識日期、品項、金額。回傳純 JSON: { "date": "YYYY-MM-DD", "items": [{ "name": "品名", "amount": 100 }] }`;
+    const result = await model.generateContent([prompt, { inlineData: { data: base64Data, mimeType: file.type || "image/jpeg" } }]);
+    const text = result.response.text().replace(/```json|```/g, '').trim();
+    return JSON.parse(text);
+  } catch (error) {
+    throw new Error("Gemini 辨識失敗: " + error.message);
+  }
+};
+
+const exportToExcel = (tripName, items) => {
+  const expenses = items.filter(i => i.type === 'expense');
+  if (expenses.length === 0) { alert('沒有支出資料可匯出'); return; }
+  const data = expenses.map(item => ({ '日期': item.date, '品項': item.title, '分類': item.category, '金額': item.amount }));
+  const ws = XLSX.utils.json_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "支出");
+  XLSX.writeFile(wb, `${tripName}_支出.xlsx`);
+};
+
+// --- 3. UI 元件 ---
+
+const LoadingScreen = () => (
+  <div className="flex flex-col items-center justify-center h-screen bg-slate-50 text-indigo-500">
+    <div className="w-12 h-12 border-4 border-slate-200 border-t-indigo-600 rounded-full animate-spin"></div>
+    <p className="mt-4 text-sm font-bold animate-pulse">正在載入您的旅程...</p>
+  </div>
+);
+
+const Modal = ({ isOpen, onClose, title, children }) => {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={onClose} />
+      <div className="relative bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden animate-fade-in max-h-[90vh] flex flex-col">
+        <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white z-10">
+          <h3 className="text-lg font-bold text-slate-800">{title}</h3>
+          <button onClick={onClose} className="p-2 bg-slate-50 rounded-full active:bg-slate-100"><X className="w-5 h-5 text-slate-500" /></button>
+        </div>
+        <div className="p-6 overflow-y-auto">{children}</div>
+      </div>
+    </div>
+  );
+};
+
+// 💎 新版 Blue Header：包含日期選擇器與功能切換
+const AppHeader = ({ settings, activeTab, setActiveTab, dateList, selectedDate, setSelectedDate, onTranslate, onSettings }) => {
+    return (
+        <div className="bg-[#4e4bf0] pt-safe-top pb-6 rounded-b-[2.5rem] shadow-xl shadow-indigo-200/50 relative z-20 text-white overflow-hidden">
+            {/* 裝飾背景 */}
+            <div className="absolute top-[-50%] left-[-20%] w-[300px] h-[300px] bg-white opacity-10 blur-[80px] rounded-full pointer-events-none"></div>
+            
+            {/* Top Bar */}
+            <div className="flex justify-between items-start px-6 pt-6 mb-6">
+                <div className="flex-1">
+                    <button onClick={onSettings} className="text-2xl font-bold flex items-center gap-2 active:opacity-80">
+                        {settings.destination || '東京'} <Settings className="w-4 h-4 opacity-50" />
+                    </button>
+                    <div className="text-sm opacity-80 font-medium tracking-wide">
+                        {settings.title || 'Tokyo Winter Trip'}
+                    </div>
+                    <div className="text-[10px] opacity-60 mt-1 uppercase tracking-wider">
+                        {settings.startDate && settings.endDate ? `${formatDate(settings.startDate)} - ${formatDate(settings.endDate)}` : '日期未定'}
+                    </div>
+                </div>
+                
+                <div className="flex gap-2 bg-[#ffffff20] p-1 rounded-xl backdrop-blur-sm">
+                   <button onClick={onTranslate} className="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-white/10 transition active:scale-95">
+                        <Languages className="w-5 h-5" />
+                   </button>
+                   <button onClick={() => setActiveTab('timeline')} className={`w-10 h-10 flex items-center justify-center rounded-lg transition active:scale-95 ${activeTab === 'timeline' ? 'bg-white text-indigo-600 shadow-md' : 'hover:bg-white/10'}`}>
+                        <Calendar className="w-5 h-5" />
+                   </button>
+                   <button onClick={() => setActiveTab('map')} className={`w-10 h-10 flex items-center justify-center rounded-lg transition active:scale-95 ${activeTab === 'map' ? 'bg-white text-indigo-600 shadow-md' : 'hover:bg-white/10'}`}>
+                        <MapIcon className="w-5 h-5" />
+                   </button>
+                   <button onClick={() => setActiveTab('wallet')} className={`w-10 h-10 flex items-center justify-center rounded-lg transition active:scale-95 ${activeTab === 'wallet' ? 'bg-white text-indigo-600 shadow-md' : 'hover:bg-white/10'}`}>
+                        <Wallet className="w-5 h-5" />
+                   </button>
+                </div>
+            </div>
+
+            {/* Date Selector (橫向捲動) */}
+            {dateList.length > 0 && activeTab === 'timeline' && (
+                <div className="flex overflow-x-auto px-6 gap-3 pb-2 scrollbar-hide snap-x">
+                    {dateList.map((date, idx) => {
+                        const isSelected = selectedDate === date;
+                        return (
+                            <button 
+                                key={date} 
+                                onClick={() => setSelectedDate(date)}
+                                className={`flex-shrink-0 flex flex-col items-center justify-center w-[4.5rem] h-[4.5rem] rounded-2xl transition-all snap-start ${isSelected ? 'bg-white text-indigo-600 shadow-lg scale-105 font-bold' : 'bg-[#ffffff20] text-white hover:bg-[#ffffff30]'}`}
+                            >
+                                <span className="text-xs opacity-80 mb-0.5">{formatDate(date)}</span>
+                                <span className="text-xl font-sans">{getDayLabel(idx)}</span>
+                            </button>
+                        )
+                    })}
+                </div>
+            )}
+            
+            {/* Wallet Summary Header (只在 Wallet Tab 顯示) */}
+            {activeTab === 'wallet' && (
+                 <div className="px-6 pb-2">
+                    <div className="text-sm opacity-70 mb-1">總支出 Total</div>
+                    <div className="text-4xl font-bold tracking-tight">¥ 0</div>
+                    <div className="text-sm opacity-60 mt-1">≈ NT$ 0</div>
+                 </div>
+            )}
+        </div>
+    );
+};
+
+// 💎 翻譯介面 (依照圖片 2)
+const TranslateView = ({ onClose }) => {
+    return (
+        <div className="p-6 space-y-6 animate-fade-in">
+            <div className="flex items-center justify-between mb-4">
+                <h2 className="text-2xl font-bold text-slate-800">Google 翻譯捷徑</h2>
+                <button onClick={onClose} className="p-2 bg-slate-100 rounded-full"><X className="w-5 h-5"/></button>
+            </div>
+            <p className="text-slate-500 text-sm mb-6">點擊下方按鈕，直接開啟 Google 翻譯頁面</p>
+            
+            <a href="https://translate.google.com/?sl=zh-TW&tl=ja&text=&op=translate" target="_blank" rel="noreferrer" className="block w-full">
+                <div className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white p-6 rounded-3xl shadow-lg shadow-blue-200 active:scale-[0.98] transition relative overflow-hidden group">
+                    <div className="relative z-10 flex justify-between items-center">
+                        <div>
+                            <div className="text-xs opacity-80 mb-1">我說中文 (轉日文)</div>
+                            <div className="text-2xl font-bold">CH <ArrowRight className="inline w-5 h-5 mx-1"/> JP</div>
+                        </div>
+                        <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center"><ArrowRight className="w-6 h-6 rotate-[-45deg] group-hover:rotate-0 transition"/></div>
+                    </div>
+                </div>
+            </a>
+
+            <a href="https://translate.google.com/?sl=ja&tl=zh-TW&text=&op=translate" target="_blank" rel="noreferrer" className="block w-full">
+                <div className="bg-white text-slate-800 border-2 border-slate-100 p-6 rounded-3xl shadow-sm active:scale-[0.98] transition group">
+                     <div className="flex justify-between items-center">
+                        <div>
+                            <div className="text-xs text-slate-400 mb-1">對方說日文 (轉中文)</div>
+                            <div className="text-2xl font-bold text-slate-700">JP <ArrowRight className="inline w-5 h-5 mx-1"/> CH</div>
+                        </div>
+                        <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center"><ArrowRight className="w-6 h-6 text-slate-400 rotate-[-45deg] group-hover:rotate-0 transition"/></div>
+                    </div>
+                </div>
+            </a>
+        </div>
+    );
+}
+
+// 💎 Timeline 介面 (依照圖片 1 - 左側時間，右側卡片)
+const TimelineView = ({ items, onEditItem, selectedDate }) => {
+  // 篩選當日項目並排序
+  const dailyItems = useMemo(() => {
+    if (!selectedDate) return [];
+    return items
+        .filter(i => i.date === selectedDate && i.type !== 'expense') // Expense 不顯示在行程表
+        .sort((a, b) => (a.startTime || '00:00') > (b.startTime || '00:00') ? 1 : -1);
+  }, [items, selectedDate]);
+
+  if (!selectedDate) return <div className="p-10 text-center text-slate-400">請先在設定中輸入日期範圍</div>;
+
+  return (
+    <div className="p-5 pb-32 space-y-6 relative">
+        {/* 左側時間軸線 */}
+        <div className="absolute left-[3.25rem] top-6 bottom-0 w-0.5 bg-slate-100 -z-10"></div>
+
+        {dailyItems.length === 0 ? (
+            <div className="text-center py-10">
+                <p className="text-slate-400 mb-4">這天還沒有行程安排</p>
+                <button className="text-indigo-600 font-bold text-sm bg-indigo-50 px-4 py-2 rounded-full">點擊 + 新增行程</button>
+            </div>
+        ) : (
+            dailyItems.map((item) => (
+                <div key={item.id} onClick={() => onEditItem(item)} className="flex items-start gap-4 group cursor-pointer active:scale-[0.99] transition">
+                    {/* Time Column */}
+                    <div className="w-20 pt-3 text-right flex flex-col items-end">
+                        <span className="text-lg font-bold text-slate-700 leading-none">{item.startTime || '--:--'}</span>
+                        <div className="mt-1 flex items-center gap-1 bg-slate-100 px-1.5 py-0.5 rounded text-[10px] text-slate-500">
+                             {item.type === 'transport' ? <Train className="w-3 h-3"/> : item.type === 'flight' ? <Plane className="w-3 h-3"/> : <MapPin className="w-3 h-3"/>}
+                             {item.type === 'transport' ? '交通' : item.type === 'flight' ? '航班' : '活動'}
+                        </div>
+                    </div>
+
+                    {/* Dot Indicator */}
+                    <div className="mt-4 w-3 h-3 rounded-full bg-indigo-500 ring-4 ring-[#f8f9fc] z-10 flex-shrink-0"></div>
+
+                    {/* Card Content */}
+                    <div className="flex-1 bg-white p-4 rounded-2xl shadow-sm border border-slate-100 mb-2">
+                        <h3 className="font-bold text-slate-800 text-lg">{item.title}</h3>
+                        {item.location && (
+                            <div className="text-sm text-slate-400 mt-1 flex items-start gap-1">
+                                <MapPin className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+                                <span className="line-clamp-1">{item.location}</span>
+                            </div>
+                        )}
+                        {item.note && (
+                             <p className="text-xs text-orange-500 mt-2 bg-orange-50 p-2 rounded-lg border border-orange-100">
+                                 💡 {item.note}
+                             </p>
+                        )}
+                    </div>
+                </div>
+            ))
+        )}
+    </div>
+  );
+};
+
+// 💎 Wallet 介面 (依照圖片 4)
+const WalletView = ({ items, settings, onEditItem, tripId }) => {
+  const expenses = items.filter(i => i.type === 'expense').sort((a, b) => b.createdAt - a.createdAt);
+  const totalYen = expenses.reduce((acc, c) => acc + Number(c.amount || 0), 0);
+  const rate = settings.rate || DEFAULT_RATE;
+  
+  const [isScanning, setIsScanning] = useState(false);
+  
+  const handleFileUpload = async (e) => {
+      const apiKey = localStorage.getItem('gemini_key');
+      if (!apiKey) return alert('請先設定 API Key');
+      const file = e.target.files[0];
+      if (!file) return;
+      setIsScanning(true);
+      try {
+          const result = await scanReceiptWithGemini(file, apiKey);
+          await Promise.all(result.items.map(i => addDoc(collection(db, 'artifacts', appId, 'trips', tripId, 'items'), { type: 'expense', title: i.name, amount: i.amount, date: result.date, category: '買', location: 'AI', createdAt: serverTimestamp() })));
+          alert(`成功匯入 ${result.items.length} 筆`);
+      } catch (err) { alert(err.message); } finally { setIsScanning(false); }
+  };
+
+  return (
+    <div className="p-5 pb-32 space-y-6 -mt-6">
+        {/* Blue Card (Total) */}
+        <div className="bg-[#4e4bf0] text-white p-6 rounded-3xl shadow-xl shadow-indigo-200">
+            <div className="flex justify-between items-start mb-2">
+                <span className="text-sm opacity-80">總支出 Total</span>
+                <div className="bg-white/20 px-2 py-1 rounded text-xs font-mono">匯率: {rate}</div>
+            </div>
+            <div className="flex items-baseline gap-2">
+                <span className="text-4xl font-bold">¥ {totalYen.toLocaleString()}</span>
+            </div>
+            <div className="text-lg opacity-80 font-medium mt-1">
+                ≈ NT$ {Math.round(totalYen * rate).toLocaleString()}
+            </div>
+            <div className="text-xs opacity-50 mt-4 text-center border-t border-white/20 pt-2">
+                (2人均分: ¥{Math.round(totalYen / 2).toLocaleString()})
+            </div>
+        </div>
+
+        {/* Actions */}
+        <div className="grid grid-cols-2 gap-3">
+             <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center text-center">
+                 <div className="text-xs text-slate-400 mb-1">豪豪 墊付</div>
+                 <div className="font-bold text-indigo-600">¥0</div>
+                 <div className="text-[10px] text-slate-300">≈ NT$0</div>
+             </div>
+             <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center text-center">
+                 <div className="text-xs text-slate-400 mb-1">柔柔 墊付</div>
+                 <div className="font-bold text-pink-500">¥0</div>
+                 <div className="text-[10px] text-slate-300">≈ NT$0</div>
+             </div>
+        </div>
+
+        {/* Expense List */}
+        <div>
+            <div className="flex justify-between items-center mb-3 px-1">
+                <h3 className="font-bold text-slate-500">新增消費</h3>
+                <button onClick={() => exportToExcel(settings.title, items)} className="text-xs text-emerald-600 bg-emerald-50 px-2 py-1 rounded flex items-center gap-1"><FileSpreadsheet className="w-3 h-3"/> 匯出</button>
+            </div>
+
+            {/* Quick Add Bar */}
+            <div className="bg-white p-2 rounded-2xl shadow-sm border border-slate-100 mb-4 flex gap-2">
+                <label className={`flex-1 bg-slate-50 text-slate-500 rounded-xl py-3 flex items-center justify-center gap-2 text-sm font-bold active:scale-95 transition cursor-pointer ${isScanning?'opacity-50':''}`}>
+                    <input type="file" className="hidden" accept="image/*" onChange={handleFileUpload} disabled={isScanning} />
+                    {isScanning ? <RefreshCw className="w-4 h-4 animate-spin"/> : <Camera className="w-4 h-4"/>} 
+                    掃描收據
+                </label>
+            </div>
+
+            <div className="space-y-3">
+                {expenses.map(ex => (
+                    <div key={ex.id} onClick={() => onEditItem(ex)} className="bg-white p-4 rounded-2xl border border-slate-50 shadow-sm flex justify-between items-center active:bg-slate-50">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-xl">
+                                {ex.category === '食' ? '🍜' : ex.category === '行' ? '🚆' : ex.category === '住' ? '🏨' : '🛍️'}
+                            </div>
+                            <div>
+                                <div className="font-bold text-slate-800">{ex.title}</div>
+                                <div className="text-xs text-slate-400">{formatDate(ex.date)}</div>
+                            </div>
+                        </div>
+                        <div className="text-right">
+                             <div className="font-bold text-slate-800">¥{Number(ex.amount).toLocaleString()}</div>
+                             <div className="text-[10px] text-slate-400">NT${Math.round(ex.amount * rate).toLocaleString()}</div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    </div>
+  );
+};
+
+// 💎 Map View (圖片 3 概念)
+const MapView = ({ settings, items }) => {
+    return (
+        <div className="h-[70vh] w-full bg-slate-100 relative">
+             <div className="absolute inset-0 flex items-center justify-center flex-col text-slate-400">
+                 <MapIcon className="w-16 h-16 mb-4 opacity-20" />
+                 <p className="text-sm">地圖模式</p>
+                 <a href={`https://www.google.com/maps/search/${settings.destination}`} target="_blank" rel="noreferrer" className="mt-4 bg-white px-6 py-3 rounded-full shadow-lg text-indigo-600 font-bold text-sm flex items-center gap-2 active:scale-95 transition">
+                     <Navigation className="w-4 h-4" /> 開啟 Google Maps
+                 </a>
+             </div>
+             {/* 這裡可以串接 Google Maps API 或 Mapbox，但在單一檔案中建議直接外連 */}
+        </div>
+    )
+}
+
+// 主程式
+export default function TravelDashApp() {
+  const [user, setUser] = useState(null);
+  const [tripId, setTripId] = useState(null);
+  
+  // Tab: 'timeline' | 'map' | 'wallet'
+  const [activeTab, setActiveTab] = useState('timeline');
+  const [showTranslate, setShowTranslate] = useState(false);
+
+  const [items, setItems] = useState([]);
+  const [settings, setSettings] = useState(null);
+  const [showSettings, setShowSettings] = useState(false);
+  
+  const [showEditor, setShowEditor] = useState(false);
+  const [editItem, setEditItem] = useState(null);
+  const [addType, setAddType] = useState('activity');
+  
+  const [selectedDate, setSelectedDate] = useState(null);
+
+  // 1. 初始化 ID
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const idFromUrl = params.get('trip');
+    if (idFromUrl) setTripId(idFromUrl);
+    else {
+        // 如果沒有 ID，自動導向到一個 Demo ID 或提示創建
+        // 這裡為了方便，若無 ID 顯示 Landing Page 邏輯保留在 Render 處
+    }
+  }, []);
+
+  // 2. Auth
+  useEffect(() => {
+    signInAnonymously(auth).catch(console.error);
+    return onAuthStateChanged(auth, u => setUser(u));
+  }, []);
+
+  // 3. Data Sync
+  useEffect(() => {
+    if (!user || !tripId) return;
+    
+    // Settings Sync
+    const settingsRef = doc(db, 'artifacts', appId, 'trips', tripId, 'settings', 'main');
+    const unsubSettings = onSnapshot(settingsRef, (snap) => {
+        if (snap.exists()) {
+            const data = snap.data();
+            setSettings(data);
+            // 如果還沒選日期，預設選第一天
+            if (!selectedDate && data.startDate) {
+                setSelectedDate(data.startDate);
+            }
+        } else {
+            const def = { title: '東京冬旅', startDate: '2025-12-05', endDate: '2025-12-09', destination: 'Tokyo', rate: 0.215 };
+            setDoc(settingsRef, def);
+            setSettings(def);
+            setShowSettings(true);
+        }
+    });
+
+    // Items Sync
+    const q = query(collection(db, 'artifacts', appId, 'trips', tripId, 'items'), orderBy('createdAt', 'desc'));
+    const unsubItems = onSnapshot(q, (snap) => setItems(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+    
+    return () => { unsubSettings(); unsubItems(); };
+  }, [user, tripId]); // remove selectedDate from dependency to avoid loop
+
+  const createNewTrip = () => {
+      const newId = 'trip_' + Math.random().toString(36).substr(2, 9);
+      const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + '?trip=' + newId;
+      window.history.pushState({path: newUrl}, '', newUrl);
+      setTripId(newId);
+  };
+
+  const handleSaveSettings = async (e) => {
+      e.preventDefault();
+      const data = Object.fromEntries(new FormData(e.target));
+      await setDoc(doc(db, 'artifacts', appId, 'trips', tripId, 'settings', 'main'), { ...data, rate: Number(data.rate) });
+      setShowSettings(false);
+      // 重設日期選擇器
+      if (data.startDate) setSelectedDate(data.startDate);
+  };
+
+  const handleSaveItem = async (e) => {
+      e.preventDefault();
+      const data = Object.fromEntries(new FormData(e.target));
+      const type = editItem ? editItem.type : addType;
+      
+      // 處理一下時間，確保有預設值
+      const payload = { 
+          ...data, 
+          type, 
+          amount: Number(data.amount || 0), 
+          updatedAt: serverTimestamp(),
+          // 如果是新增且沒有選日期，預設用目前選的日期
+          date: data.date || selectedDate 
+      };
+      
+      if (!editItem) payload.createdAt = serverTimestamp();
+      
+      const ref = editItem ? doc(db, 'artifacts', appId, 'trips', tripId, 'items', editItem.id) : collection(db, 'artifacts', appId, 'trips', tripId, 'items');
+      editItem ? await updateDoc(ref, payload) : await addDoc(ref, payload);
+      
+      setShowEditor(false);
+      setEditItem(null);
+  };
+
+  const handleDeleteItem = async () => {
+      if (!window.confirm('刪除此項目？')) return;
+      await deleteDoc(doc(db, 'artifacts', appId, 'trips', tripId, 'items', editItem.id));
+      setShowEditor(false);
+  };
+
+  const openAdd = () => { setEditItem(null); setAddType(activeTab === 'wallet' ? 'expense' : 'activity'); setShowEditor(true); };
+  const openEdit = (item) => { setEditItem(item); setAddType(item.type); setShowEditor(true); };
+
+  // Generate Date List
+  const dateList = useMemo(() => {
+      if (!settings) return [];
+      return generateDateRange(settings.startDate, settings.endDate);
+  }, [settings]);
+
+  // Loading / Landing
+  if (!tripId) return (
+    <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-6 text-center">
+       <h1 className="text-4xl font-bold text-white mb-4">Travel Dash v2</h1>
+       <button onClick={createNewTrip} className="bg-indigo-600 text-white px-8 py-3 rounded-full font-bold shadow-lg hover:bg-indigo-500 transition">建立新旅程</button>
+    </div>
+  );
+  if (!user || !settings) return <LoadingScreen />;
+
+  const typeIcons = { activity: MapPin, flight: Plane, hotel: BedDouble, transport: Train, expense: Wallet };
+  const typeLabels = { activity: '活動', flight: '航班', hotel: '住宿', transport: '交通', expense: '支出' };
+
+  return (
+    <div className="bg-[#f8f9fc] min-h-screen text-slate-800 font-sans pb-safe selection:bg-indigo-100">
+      
+      {/* 頂部 Header & Nav */}
+      <AppHeader 
+         settings={settings} 
+         activeTab={activeTab} 
+         setActiveTab={setActiveTab}
+         dateList={dateList}
+         selectedDate={selectedDate}
+         setSelectedDate={setSelectedDate}
+         onTranslate={() => setShowTranslate(true)}
+         onSettings={() => setShowSettings(true)}
+      />
+
+      <main className="max-w-lg mx-auto min-h-screen relative bg-[#f8f9fc]">
+        {showTranslate ? (
+            <TranslateView onClose={() => setShowTranslate(false)} />
+        ) : (
+            <>
+                {activeTab === 'timeline' && <TimelineView items={items} onEditItem={openEdit} selectedDate={selectedDate} />}
+                {activeTab === 'wallet' && <WalletView items={items} settings={settings} onEditItem={openEdit} tripId={tripId} />}
+                {activeTab === 'map' && <MapView settings={settings} items={items} />}
+            </>
+        )}
+      </main>
+
+      {/* Floating Add Button */}
+      {!showTranslate && (
+          <button onClick={openAdd} className="fixed bottom-8 right-6 w-14 h-14 bg-indigo-600 rounded-full text-white shadow-xl shadow-indigo-300 flex items-center justify-center hover:scale-105 active:scale-95 transition-all z-40">
+            <Plus className="w-7 h-7" />
+          </button>
+      )}
+
+      {/* 設定 Modal */}
+      <Modal isOpen={showSettings} onClose={() => setShowSettings(false)} title="旅程設定">
+          <form onSubmit={handleSaveSettings} className="space-y-4">
+              <div className="space-y-1"><label className="text-xs font-bold text-slate-500 uppercase">旅程名稱</label><input name="title" defaultValue={settings.title} className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 font-bold focus:ring-2 focus:ring-indigo-500 outline-none transition" required /></div>
+              <div className="space-y-1"><label className="text-xs font-bold text-slate-500 uppercase">目的地</label><input name="destination" defaultValue={settings.destination} className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 font-bold focus:ring-2 focus:ring-indigo-500 outline-none transition" /></div>
+              <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1"><label className="text-xs font-bold text-slate-500 uppercase">開始日期</label><input name="startDate" type="date" defaultValue={settings.startDate} className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 font-bold focus:ring-2 focus:ring-indigo-500 outline-none transition" /></div>
+                  <div className="space-y-1"><label className="text-xs font-bold text-slate-500 uppercase">結束日期</label><input name="endDate" type="date" defaultValue={settings.endDate} className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 font-bold focus:ring-2 focus:ring-indigo-500 outline-none transition" /></div>
+              </div>
+              <div className="space-y-1"><label className="text-xs font-bold text-slate-500 uppercase">匯率 (JPY to TWD)</label><input name="rate" type="number" step="0.001" defaultValue={settings.rate || DEFAULT_RATE} className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 font-bold focus:ring-2 focus:ring-indigo-500 outline-none transition" /></div>
+              <div className="space-y-1"><label className="text-xs font-bold text-slate-500 uppercase">Gemini API Key</label><input type="password" defaultValue={localStorage.getItem('gemini_key') || ''} onChange={e => localStorage.setItem('gemini_key', e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-xs font-mono focus:ring-2 focus:ring-indigo-500 outline-none transition" placeholder="輸入 API Key 以啟用掃描..." /></div>
+              <button type="submit" className="w-full bg-indigo-600 text-white font-bold py-4 rounded-2xl active:scale-95 transition shadow-lg shadow-indigo-200 mt-2">儲存變更</button>
+          </form>
+      </Modal>
+
+      {/* 新增/編輯 Modal */}
+      <Modal isOpen={showEditor} onClose={() => setShowEditor(false)} title={editItem ? '編輯項目' : '新增項目'}>
+          <form onSubmit={handleSaveItem} className="space-y-5">
+              {!editItem && (
+                  <div className="flex justify-between gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                      {['activity', 'transport', 'flight', 'hotel', 'expense'].map(type => {
+                          const Icon = typeIcons[type];
+                          return (
+                              <button key={type} type="button" onClick={() => setAddType(type)} className={`flex flex-col items-center gap-2 min-w-[60px] p-3 rounded-2xl transition-all ${addType === type ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 scale-105' : 'bg-slate-50 text-slate-400 hover:bg-slate-100'}`}>
+                                  <Icon className="w-6 h-6" />
+                                  <span className="text-[10px] font-bold">{typeLabels[type]}</span>
+                              </button>
+                          );
+                      })}
+                  </div>
+              )}
+
+              <div className="space-y-1"><label className="text-xs font-bold text-slate-500 ml-1">標題</label><input name="title" defaultValue={editItem?.title} placeholder="請輸入標題 (例如: 淺草寺)" className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 font-bold focus:ring-2 focus:ring-indigo-500 outline-none transition" required /></div>
+              
+              {addType === 'expense' ? (
+                 <div className="grid grid-cols-2 gap-3">
+                     <div className="space-y-1"><label className="text-xs font-bold text-slate-500 ml-1">金額 (JPY)</label><input name="amount" type="number" defaultValue={editItem?.amount} className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 focus:ring-2 focus:ring-indigo-500 outline-none" required /></div>
+                     <div className="space-y-1"><label className="text-xs font-bold text-slate-500 ml-1">分類</label><select name="category" defaultValue={editItem?.category} className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 appearance-none outline-none"><option value="食">食</option><option value="買">買</option><option value="行">行</option><option value="住">住</option></select></div>
+                 </div>
+              ) : (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1"><label className="text-xs font-bold text-slate-500 ml-1">時間</label><input name="startTime" type="time" defaultValue={editItem?.startTime} className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 focus:ring-2 focus:ring-indigo-500 outline-none" required /></div>
+                    <div className="space-y-1"><label className="text-xs font-bold text-slate-500 ml-1">日期</label><input name="date" type="date" defaultValue={editItem?.date || selectedDate} className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 focus:ring-2 focus:ring-indigo-500 outline-none" required /></div>
+                  </div>
+              )}
+              
+              {addType !== 'expense' && (
+                 <>
+                    <div className="space-y-1"><label className="text-xs font-bold text-slate-500 ml-1">地點 / 備註</label><input name="location" placeholder="地點或備註..." defaultValue={editItem?.location} className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 focus:ring-2 focus:ring-indigo-500 outline-none" /></div>
+                    <div className="space-y-1"><label className="text-xs font-bold text-slate-500 ml-1">重要提示 (黃底)</label><input name="note" placeholder="例如: 記得帶護照..." defaultValue={editItem?.note} className="w-full bg-orange-50 border border-orange-200 rounded-2xl p-4 focus:ring-2 focus:ring-orange-500 outline-none text-orange-800 placeholder-orange-300" /></div>
+                 </>
+              )}
+
+              <div className="flex gap-3 pt-4">
+                  {editItem && <button type="button" onClick={handleDeleteItem} className="flex-1 bg-red-50 text-red-500 font-bold py-4 rounded-2xl active:scale-95 transition">刪除</button>}
+                  <button type="submit" className="flex-[2] bg-indigo-600 text-white font-bold py-4 rounded-2xl active:scale-95 transition shadow-lg shadow-indigo-200">確認</button>
+              </div>
+          </form>
+      </Modal>
+      <style>{`
+        .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+        .pt-safe-top { padding-top: max(env(safe-area-inset-top), 20px); }
+        .animate-fade-in { animation: fadeIn 0.3s ease-out; }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+      `}</style>
+    </div>
+  );
+}
   getFirestore, 
   collection, 
   addDoc, 
