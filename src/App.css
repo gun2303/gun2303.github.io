@@ -1,104 +1,352 @@
-/* App.css */
+/* --- 全域變數定義：專業配色系統 --- */
+:root {
+  /* 主色調：深海藍 (代表信任、專業) */
+  --primary: #2C3E50;
+  /* 強調色：活力橘 (用於重要按鈕、天氣) */
+  --accent: #E67e22;
+  /* 輔助色：科技藍 (用於導航、連結) */
+  --info: #3498DB;
+  /* 警告/刪除色 */
+  --danger: #E74C3C;
+  
+  /* 背景與文字 */
+  --bg-body: #F4F6F8;       /* 淺灰冷色調背景 */
+  --bg-card: #FFFFFF;       /* 純白卡片 */
+  --text-main: #2C3E50;     /* 主要文字 */
+  --text-sub: #7F8C8D;      /* 次要文字 */
+  
+  /* 介面細節 */
+  --radius: 12px;           /* 現代感圓角 */
+  --shadow-card: 0 4px 20px rgba(0, 0, 0, 0.05); /* 高級懸浮陰影 */
+  --shadow-hover: 0 8px 25px rgba(0, 0, 0, 0.1); /* 互動懸浮陰影 */
+}
+
+/* --- 基礎設定 --- */
 body {
-  background-color: #f4f6f8;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background-color: var(--bg-body);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  color: var(--text-main);
   margin: 0;
-  padding: 20px;
+  padding: 40px 20px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased; /* 字體平滑化 */
 }
 
 .app-container {
-  max-width: 500px;
+  max-width: 550px;
   margin: 0 auto;
 }
 
-/* Header */
+/* --- 頂部標題區 --- */
 .header-section {
   text-align: center;
-  margin-bottom: 20px;
+  margin-bottom: 40px;
 }
 
 .editable-title {
   display: block;
   width: 100%;
-  font-size: 24px;
-  font-weight: bold;
-  text-align: center;
-  border: none;
+  font-size: 32px;
+  font-weight: 800;
+  color: var(--primary);
   background: transparent;
-  margin-bottom: 5px;
-  color: #333;
+  border: none;
+  text-align: center;
+  margin-bottom: 8px;
+  outline: none;
+  letter-spacing: -0.5px;
+}
+
+.editable-title:focus {
+  border-bottom: 2px solid var(--info);
 }
 
 .editable-date {
   display: block;
   width: 100%;
-  text-align: center;
-  border: none;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-sub);
   background: transparent;
-  color: #666;
-  font-size: 16px;
+  border: none;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  outline: none;
 }
 
-/* Card Style */
+/* --- 工具列 (翻譯) --- */
+.tool-bar {
+  margin-top: 25px;
+  display: flex;
+  justify-content: center;
+}
+
+.trans-box {
+  background: var(--bg-card);
+  padding: 8px 24px;
+  border-radius: 50px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+  border: 1px solid rgba(0,0,0,0.03);
+}
+
+.trans-box select {
+  border: none;
+  background: transparent;
+  font-weight: 700;
+  color: var(--primary);
+  font-size: 14px;
+  cursor: pointer;
+  outline: none;
+}
+
+.tool-btn {
+  background: var(--primary);
+  color: white;
+  border: none;
+  border-radius: 20px;
+  padding: 6px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.tool-btn:hover { background: #1a252f; transform: translateY(-1px); }
+
+/* --- 卡片通用樣式 --- */
 .card {
-  background: white;
-  border-radius: 12px;
-  padding: 16px;
-  margin-bottom: 16px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  padding: 24px;
+  margin-bottom: 24px;
+  box-shadow: var(--shadow-card);
+  border: 1px solid rgba(0,0,0,0.02);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-hover);
 }
 
 h3 {
-  margin-top: 0;
-  border-bottom: 1px solid #eee;
-  padding-bottom: 8px;
+  margin: 0 0 20px 0;
   font-size: 18px;
-  color: #4A90E2;
+  color: var(--primary);
+  font-weight: 700;
+  border-bottom: 2px solid #F0F2F5;
+  padding-bottom: 12px;
+  display: flex;
+  align-items: center;
 }
 
-/* Flex Helpers */
-.form-row {
+/* --- 行程卡片 (D1, D2...) --- */
+.day-card {
+  background: #FFFFFF;
+  border: 1px solid #E1E8ED;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+  position: relative; /* 為了定位刪除按鈕 */
+}
+
+.day-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.day-header strong {
+  font-size: 18px;
+  color: var(--primary);
+}
+
+.tag {
+  background: #E8F6F3;
+  color: #1ABC9C;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 800;
+  margin-left: 10px;
+}
+
+/* 地點輸入框 */
+.location-input {
+  width: 100%;
+  padding: 12px 15px;
+  background: #F8F9FA;
+  border: 1px solid #E1E8ED;
+  border-radius: 8px;
+  font-size: 15px;
+  color: var(--text-main);
+  margin-bottom: 12px;
+  box-sizing: border-box;
+  transition: all 0.2s;
+}
+.location-input:focus {
+  background: #fff;
+  border-color: var(--info);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+}
+
+/* 導航與天氣按鈕群組 */
+.day-actions {
   display: flex;
   gap: 10px;
-  margin-bottom: 10px;
+}
+
+.action-btn {
+  flex: 1;
+  padding: 10px;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: opacity 0.2s;
+}
+
+.map-btn {
+  background: var(--info); /* 藍色導航 */
+  color: white;
+}
+
+.weather-btn {
+  background: var(--accent); /* 橘色天氣 */
+  color: white;
+}
+
+.action-btn:hover { opacity: 0.9; }
+
+/* 刪除按鈕 (紅色 X) */
+.x-btn {
+  background: transparent;
+  color: #BDC3C7;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 0 5px;
+  transition: color 0.2s;
+}
+.x-btn:hover { color: var(--danger); }
+
+/* --- 匯率換算與輸入表單 --- */
+.converter-inputs {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.converter-result {
+  margin-top: 15px;
+  text-align: center;
+  background: #FEF9E7; /* 淡黃背景 */
+  color: #F1C40F;       /* 深黃文字 */
+  padding: 12px;
+  border-radius: 8px;
+  font-weight: 700;
+  border: 1px solid #F9E79F;
+}
+
+.form-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 12px;
 }
 
 input, select {
-  padding: 10px;
+  width: 100%;
+  padding: 12px;
   border: 1px solid #ddd;
-  border-radius: 6px;
-  font-size: 16px;
-  width: 100%;
+  border-radius: 8px;
+  font-size: 14px;
   box-sizing: border-box;
+  outline: none;
+  background: #fff;
 }
+input:focus, select:focus { border-color: var(--primary); }
 
-.full-width-input {
+.full-width-input { width: 100%; margin-bottom: 15px; }
+
+/* --- 主要操作按鈕 (新增/儲存) --- */
+.save-btn {
   width: 100%;
-  margin-bottom: 10px;
-}
-
-/* Buttons */
-button {
-  cursor: pointer;
+  background: var(--primary);
+  color: white;
+  padding: 14px;
   border: none;
-  border-radius: 6px;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.save-btn:hover { background: #34495e; }
+
+.add-btn {
+  width: 100%;
+  background: #fff;
+  color: var(--text-sub);
+  border: 2px dashed #BDC3C7;
+  padding: 12px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 10px;
+  transition: all 0.2s;
+}
+.add-btn:hover {
+  border-color: var(--info);
+  color: var(--info);
+  background: #F0F8FF;
 }
 
-.add-btn { background: #eee; color: #333; padding: 6px 12px; }
-.save-btn { background: #4A90E2; color: white; width: 100%; padding: 12px; font-size: 16px; }
-.x-btn { background: #ff7675; color: white; width: 24px; height: 24px; border-radius: 50%; margin-left: 5px; }
-.del-text-btn { background: transparent; color: #999; font-size: 12px; }
+/* --- 支出列表明細 --- */
+.expense-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px 0;
+  border-bottom: 1px solid #F0F2F5;
+}
 
-/* Tags & List */
-.days-grid { display: flex; flex-wrap: wrap; gap: 8px; }
-.day-tag { background: #eef2f7; padding: 6px 10px; border-radius: 20px; display: flex; align-items: center; }
+.expense-item:last-child { border-bottom: none; }
 
-.expense-item { display: flex; justify-content: space-between; border-bottom: 1px solid #f0f0f0; padding: 10px 0; }
-.exp-date-cat { font-weight: bold; font-size: 14px; }
-.badge { background: #e0f7fa; color: #006064; padding: 2px 6px; border-radius: 4px; font-size: 12px; margin-right: 5px; }
-.exp-note { color: #888; font-size: 12px; margin-top: 4px; }
-.exp-amount { font-weight: bold; color: #333; }
+.badge {
+  background: #EDF2F7;
+  color: var(--text-main);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  margin-right: 8px;
+  text-transform: uppercase;
+}
 
-/* Converter */
-.converter-inputs { display: flex; gap: 5px; align-items: center; }
-.converter-result { margin-top: 10px; text-align: center; background: #fff3cd; padding: 8px; border-radius: 6px; font-weight: bold; }
+.exp-note {
+  color: var(--text-sub);
+  font-size: 13px;
+  margin-left: 6px;
+  font-style: italic;
+}
+
+.del-text-btn {
+  background: none;
+  border: none;
+  color: var(--text-sub);
+  font-size: 12px;
+  cursor: pointer;
+  margin-left: 10px;
+  text-decoration: underline;
+}
+.del-text-btn:hover { color: var(--danger); }
