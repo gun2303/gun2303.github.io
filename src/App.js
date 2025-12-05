@@ -1,201 +1,295 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import './App.css';
 
 const App = () => {
-  // --- 核心資料狀態 (State) ---
-  
-  // 1. 標題與日期 (可編輯)
+  // --- 1. 全域狀態 ---
   const [tripTitle, setTripTitle] = useState("Hokkaido 2026");
-  const [tripDate, setTripDate] = useState("DEC 05 - DEC 09");
-  
-  // 2. 導航頁籤狀態 (預設顯示行程)
   const [activeTab, setActiveTab] = useState('schedule'); 
+  const [activeDateIndex, setActiveDateIndex] = useState(0); 
 
-  // 3. 行程資料 (動態陣列)
+  // --- 2. 行程核心資料 ---
   const [days, setDays] = useState([
-    { id: 1, date: '12/05', week: '五', location: '新千歲機場', note: '記得領取 JR Pass' },
-    { id: 2, date: '12/06', week: '六', location: '札幌大通公園', note: '參觀聖誕市集' },
-    { id: 3, date: '12/07', week: '日', location: '小樽運河', note: '必吃 LeTAO' },
+    {
+      id: 1, date: '12/05', week: 'Fri',
+      weather: { high: 2, low: -5, feel: -8, cond: '大雪' },
+      // 航班資訊：新增 flightDate 與 termLoc (用於精準導航)
+      flight: { 
+        flightDate: '2025/12/05', 
+        code: 'CI0130', 
+        time: '08:35', 
+        seat: '12A', 
+        term: 'T2', 
+        termLoc: '桃園機場第二航廈', // 專門給導航用的關鍵字
+        note: '記得預辦登機' 
+      },
+      // 住宿資訊：新增 checkIn/Out 日期
+      hotel: { 
+        checkIn: '12/05', 
+        checkOut: '12/06', 
+        name: '札幌格蘭大飯店', 
+        addr: '札幌市中央區北1西4' 
+      },
+      events: [
+        { id: 101, time: '06:00', loc: '桃園機場', type: 'transport', transType: 'flight', transTime: '4h 40m' },
+        { id: 102, time: '13:15', loc: '新千歲機場', type: 'spot', transType: 'train', transTime: '40m' },
+        { id: 103, time: '15:00', loc: '飯店 Check-in', type: 'stay', transType: 'walk', transTime: '10m' },
+        { id: 104, time: '18:00', loc: '大通公園聖誕市集', type: 'spot', transType: '', transTime: '' }
+      ]
+    },
+    {
+      id: 2, date: '12/06', week: 'Sat',
+      weather: { high: 0, low: -3, feel: -5, cond: '多雲' },
+      flight: null, 
+      hotel: { 
+        checkIn: '12/06', 
+        checkOut: '12/07', 
+        name: '小樽多米酒店', 
+        addr: '小樽市色內2-11' 
+      },
+      events: [
+        { id: 201, time: '09:00', loc: '二條市場早餐', type: 'food', transType: 'metro', transTime: '15m' },
+        { id: 202, time: '10:30', loc: '前往小樽', type: 'spot', transType: 'train', transTime: '45m' },
+        { id: 203, time: '12:00', loc: '小樽運河食堂', type: 'food', transType: 'walk', transTime: '5m' }
+      ]
+    },
+    { id: 3, date: '12/07', week: 'Sun', weather: { high: 5, low: 1, feel: 0, cond: '晴天' }, flight: null, hotel: null, events: [] },
   ]);
 
-  // 4. 記帳資料
+  // --- 3. 匯率與記帳狀態 ---
+  const currencyList = ['TWD', 'JPY', 'KRW', 'USD', 'THB', 'VND', 'INR'];
+  const [rates] = useState({ TWD: 1, JPY: 4.65, KRW: 42.5, USD: 0.032, THB: 1.12, VND: 760, INR: 2.6 });
+  
+  const [converter, setConverter] = useState({ amount: '', from: 'JPY', to: 'TWD', res: null });
   const [expenses, setExpenses] = useState([]);
-  const [newExpense, setNewExpense] = useState({ name: '', amount: '', curr: 'JPY', type: '飲食' });
+  const [newExp, setNewExp] = useState({ item: '', amt: '', curr: 'JPY', type: '購物' });
 
-  // 5. 匯率計算機狀態
-  const [calc, setCalc] = useState({ amount: '', result: null });
-  const rates = { JPY: 0.215, KRW: 0.024, USD: 31.5, THB: 0.9 }; // 簡單範例匯率 (外幣 -> 台幣)
-
-  // 6. 翻譯設定
-  const [trans, setTrans] = useState({ from: 'zh-TW', to: 'ja' });
-
-  // --- 功能邏輯函數 ---
-
-  // 行程：新增/刪除/更新
-  const addDay = () => {
-    const newId = Date.now();
-    setDays([...days, { id: newId, date: 'MM/DD', week: '-', location: '新地點', note: '點擊編輯備註' }]);
-  };
-  const deleteDay = (id) => setDays(days.filter(d => d.id !== id));
-  const updateDay = (id, field, val) => {
-    setDays(days.map(d => d.id === id ? { ...d, [field]: val } : d));
+  // --- 4. 輔助函數 ---
+  const getTransIcon = (type) => {
+    switch(type) {
+      case 'flight': return '✈️ 飛機';
+      case 'hsr': return '🚅 高鐵';
+      case 'train': return '🚆 火車';
+      case 'metro': return '🚇 捷運';
+      case 'walk': return '🚶 步行';
+      case 'bus': return '🚌 巴士';
+      default: return '🚗 移動';
+    }
   };
 
-  // 工具連結
-  const openMap = (loc) => window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(loc)}`, '_blank');
-  const openWeather = (loc) => window.open(`https://www.google.com/search?q=${encodeURIComponent(loc + " 天氣")}`, '_blank');
-  const openTranslate = () => window.open(`https://translate.google.com/?sl=${trans.from}&tl=${trans.to}&op=translate`, '_blank');
-
-  // 匯率計算
-  const handleCalc = (val) => {
-    setCalc({ amount: val, result: val ? (parseFloat(val) * rates.JPY).toFixed(0) : null });
+  // 導航功能 (通用)
+  const openMap = (loc) => {
+    if(!loc) return;
+    window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(loc)}`, '_blank');
   };
 
-  // 記帳
-  const handleAddExpense = () => {
-    if (!newExpense.amount || !newExpense.name) return alert("請輸入金額與項目");
-    setExpenses([...expenses, { id: Date.now(), ...newExpense }]);
-    setNewExpense({ ...newExpense, name: '', amount: '' });
+  const handleConvert = () => { /* 自動計算，邏輯在 render */ }; 
+  // 修正：即時計算，這裡僅保留結構
+  
+  const addExpense = () => {
+    if(!newExp.item || !newExp.amt) return;
+    setExpenses([...expenses, { id: Date.now(), ...newExp }]);
+    setNewExp({...newExp, item: '', amt: ''});
   };
-  const deleteExpense = (id) => setExpenses(expenses.filter(e => e.id !== id));
 
-  // --- 畫面渲染 (Render) ---
+  const addEvent = () => {
+    const newLoc = prompt("輸入地點名稱:");
+    if(newLoc) {
+      const updatedDays = [...days];
+      updatedDays[activeDateIndex].events.push({
+        id: Date.now(), time: '00:00', loc: newLoc, type: 'spot', transType: 'walk', transTime: '10m'
+      });
+      setDays(updatedDays);
+    }
+  };
+
+  // 即時匯率計算邏輯
+  const convertedResult = converter.amount 
+    ? ((parseFloat(converter.amount) / rates[converter.from]) * rates[converter.to]).toLocaleString(undefined, {maximumFractionDigits: 2})
+    : 0;
+
+  const currentDay = days[activeDateIndex];
+
   return (
     <div className="mobile-wrapper">
       
-      {/* 頂部 Hero 區塊 (可編輯標題) */}
-      <div className="hero-section">
-        <div className="hero-overlay">
-          <input className="hero-title" value={tripTitle} onChange={(e) => setTripTitle(e.target.value)} />
-          <input className="hero-subtitle" value={tripDate} onChange={(e) => setTripDate(e.target.value)} />
-        </div>
-
-        {/* 懸浮導航球 (Tab 切換) */}
-        <div className="floating-nav">
-          <button className={`nav-btn ${activeTab === 'schedule' ? 'active' : ''}`} onClick={() => setActiveTab('schedule')}>🗺️</button>
-          <button className={`nav-btn ${activeTab === 'tools' ? 'active' : ''}`} onClick={() => setActiveTab('tools')}>🛠️</button>
-          <button className={`nav-btn ${activeTab === 'money' ? 'active' : ''}`} onClick={() => setActiveTab('money')}>💰</button>
+      {/* 頂部 Hero & 日期導航 */}
+      <div className="hero-header">
+        <input className="hero-title" value={tripTitle} onChange={(e)=>setTripTitle(e.target.value)} />
+        <div className="date-tabs-container">
+          {days.map((day, idx) => (
+            <button 
+              key={day.id} 
+              className={`date-tab ${idx === activeDateIndex ? 'active' : ''}`}
+              onClick={() => setActiveDateIndex(idx)}
+            >
+              <div className="week">{day.week}</div>
+              <div className="date">{day.date}</div>
+            </button>
+          ))}
+          <button className="date-tab add-day">+</button>
         </div>
       </div>
 
-      <div className="content-area">
-
-        {/* --- 1. 行程表 Tab --- */}
+      <div className="content-body">
+        
+        {/* --- 模式 A: 行程表 --- */}
         {activeTab === 'schedule' && (
           <div className="fade-in">
-            {days.map((day, index) => (
-              <div key={day.id} className="card schedule-card">
-                <div className="card-header">
-                  <div className="date-badge">
-                    <input className="input-date" value={day.date} onChange={(e) => updateDay(day.id, 'date', e.target.value)} />
-                    <span className="week-label">{`D${index+1}`}</span>
-                  </div>
-                  <button className="btn-delete-sm" onClick={() => deleteDay(day.id)}>×</button>
+            
+            {/* 1. 天氣卡片 */}
+            <div className="info-card weather-card">
+              <div className="wc-left">
+                <div className="wc-icon">❄️</div>
+                <div className="wc-text">
+                  <div className="temp">{currentDay.weather.high}° <span className="low">/{currentDay.weather.low}°</span></div>
+                  <div className="feel">體感: {currentDay.weather.feel}°</div>
+                </div>
+              </div>
+              <div className="wc-right">{currentDay.weather.cond}</div>
+            </div>
+
+            {/* 2. 航班資訊 (升級版) */}
+            {currentDay.flight && (
+              <div className="info-card flight-card">
+                <div className="card-label-row">
+                  <span className="card-label">✈️ 航班資訊</span>
+                  <span className="flight-date-tag">{currentDay.flight.flightDate}</span>
                 </div>
                 
-                <div className="card-body">
-                  <input 
-                    className="input-location" 
-                    value={day.location} 
-                    onChange={(e) => updateDay(day.id, 'location', e.target.value)} 
-                    placeholder="輸入地點..."
-                  />
-                  <input 
-                    className="input-note" 
-                    value={day.note} 
-                    onChange={(e) => updateDay(day.id, 'note', e.target.value)} 
-                    placeholder="備註..."
-                  />
+                <div className="flight-main">
+                  <div className="flight-code">{currentDay.flight.code}</div>
+                  <div className="flight-time">{currentDay.flight.time} 起飛</div>
                 </div>
-
-                <div className="card-actions">
-                  <button className="btn-action blue" onClick={() => openMap(day.location)}>📍 導航</button>
-                  <button className="btn-action yellow" onClick={() => openWeather(day.location)}>⛅ 天氣</button>
-                </div>
-              </div>
-            ))}
-            <button className="fab-add" onClick={addDay}>+</button>
-            <div style={{height:'60px'}}></div> {/* 墊高底部防遮擋 */}
-          </div>
-        )}
-
-        {/* --- 2. 工具 Tab (翻譯) --- */}
-        {activeTab === 'tools' && (
-          <div className="fade-in">
-            <div className="card tool-card">
-              <h3>🗣️ 多國語言翻譯</h3>
-              <div className="trans-row">
-                <select value={trans.from} onChange={e=>setTrans({...trans, from:e.target.value})}>
-                  <option value="zh-TW">中文</option><option value="en">英文</option><option value="ja">日文</option>
-                </select>
-                <span>⮕</span>
-                <select value={trans.to} onChange={e=>setTrans({...trans, to:e.target.value})}>
-                  <option value="ja">日文</option><option value="en">英文</option><option value="zh-TW">中文</option><option value="ko">韓文</option>
-                </select>
-              </div>
-              <button className="btn-full blue" onClick={openTranslate}>開啟 Google 翻譯</button>
-            </div>
-            
-            <div className="card tool-card">
-              <h3>☁️ 實用連結</h3>
-              <p style={{color:'#666', fontSize:'14px'}}>整合地圖、天氣與匯率查詢。</p>
-            </div>
-          </div>
-        )}
-
-        {/* --- 3. 記帳與匯率 Tab --- */}
-        {activeTab === 'money' && (
-          <div className="fade-in">
-            {/* 匯率計算機 (深藍色卡片) */}
-            <div className="exchange-card">
-              <h3>🧮 匯率換算 (JPY to TWD)</h3>
-              <div className="ex-row">
-                <input type="number" placeholder="日幣金額" value={calc.amount} onChange={(e)=>handleCalc(e.target.value)} />
-                <span className="arrow">⇄</span>
-                <div className="ex-result">$ {calc.result || 0}</div>
-              </div>
-              <small style={{opacity:0.7, marginTop:'10px', display:'block'}}>匯率基準: 0.215</small>
-            </div>
-
-            {/* 新增支出表單 */}
-            <div className="card expense-form">
-              <h3>📝 新增支出</h3>
-              <div className="form-group">
-                <input placeholder="項目 (如: 拉麵)" value={newExpense.name} onChange={e=>setNewExpense({...newExpense, name:e.target.value})} />
-                <select value={newExpense.type} onChange={e=>setNewExpense({...newExpense, type:e.target.value})}>
-                  <option>飲食</option><option>交通</option><option>購物</option><option>住宿</option>
-                </select>
-              </div>
-              <div className="form-group">
-                 <input type="number" placeholder="金額" value={newExpense.amount} onChange={e=>setNewExpense({...newExpense, amount:e.target.value})} />
-                 <select value={newExpense.curr} onChange={e=>setNewExpense({...newExpense, curr:e.target.value})}>
-                   <option value="JPY">JPY</option><option value="TWD">TWD</option><option value="USD">USD</option>
-                 </select>
-              </div>
-              <button className="btn-full dark" onClick={handleAddExpense}>加入帳本</button>
-            </div>
-
-            {/* 支出列表 */}
-            <div className="expense-list">
-              {expenses.map(exp => (
-                <div key={exp.id} className="expense-item">
-                  <div className="exp-left">
-                    <span className="exp-tag">{exp.type}</span>
-                    <span className="exp-name">{exp.name}</span>
+                
+                <div className="flight-details">
+                  <div className="flight-detail-item">
+                    <span>航廈: {currentDay.flight.term}</span>
+                    {/* 航廈導航按鈕 */}
+                    <button className="icon-btn-sm" onClick={() => openMap(currentDay.flight.termLoc)}>📍</button>
                   </div>
-                  <div className="exp-right">
-                    <span className="exp-amount">{exp.amount} <small>{exp.curr}</small></span>
-                    <button className="btn-del-text" onClick={()=>deleteExpense(exp.id)}>刪除</button>
+                  <div className="flight-detail-item">座位: {currentDay.flight.seat}</div>
+                </div>
+                <div className="note-text">備註: {currentDay.flight.note}</div>
+              </div>
+            )}
+
+            {/* 3. 住宿資訊 (升級版) */}
+            {currentDay.hotel && (
+              <div className="info-card hotel-card">
+                 <div className="card-label-row">
+                    <span className="card-label">🏨 今晚住宿</span>
+                    <span className="hotel-date-tag">
+                      {currentDay.hotel.checkIn} - {currentDay.hotel.checkOut}
+                    </span>
+                 </div>
+                 <div className="hotel-name">{currentDay.hotel.name}</div>
+                 <div className="hotel-addr-row">
+                   <div className="hotel-addr">📍 {currentDay.hotel.addr}</div>
+                   <button className="sm-btn map-outline" onClick={() => openMap(currentDay.hotel.name + " " + currentDay.hotel.addr)}>
+                     導航
+                   </button>
+                 </div>
+              </div>
+            )}
+
+            {/* 4. 行程時間軸 */}
+            <div className="timeline-container">
+              {currentDay.events.map((ev, i) => (
+                <div key={ev.id} className="timeline-item">
+                  <div className="tl-time">{ev.time}</div>
+                  <div className="tl-line-col">
+                    <div className="tl-dot"></div>
+                    {i < currentDay.events.length - 1 && (
+                      <div className="tl-line">
+                         {ev.transType && (
+                           <div className="trans-badge">
+                             {getTransIcon(ev.transType)} <span className="trans-min">{ev.transTime}</span>
+                           </div>
+                         )}
+                      </div>
+                    )}
+                  </div>
+                  <div className="tl-content">
+                     <div className="tl-card">
+                       <div className="tl-loc">{ev.loc}</div>
+                       <div className="tl-actions">
+                         <button className="sm-btn map" onClick={() => openMap(ev.loc)}>導航</button>
+                         <button className="sm-btn edit">編輯</button>
+                       </div>
+                     </div>
                   </div>
                 </div>
               ))}
-              {expenses.length === 0 && <p style={{textAlign:'center', color:'#aaa'}}>目前沒有支出紀錄</p>}
+              
+              <div className="timeline-item add-btn-row">
+                 <div className="tl-time"></div>
+                 <div className="tl-line-col"><div className="tl-dot add">+</div></div>
+                 <div className="tl-content">
+                    <button className="btn-add-event" onClick={addEvent}>新增行程地點</button>
+                 </div>
+              </div>
             </div>
-            <div style={{height:'60px'}}></div>
+
+          </div>
+        )}
+
+        {/* --- 模式 B: 記帳與匯率 --- */}
+        {activeTab === 'money' && (
+          <div className="fade-in">
+             <div className="currency-converter">
+                <h3>💱 萬能匯率換算</h3>
+                <div className="conv-row">
+                   <input type="number" placeholder="金額" value={converter.amount} onChange={e=>setConverter({...converter, amount:e.target.value})}/>
+                   <select value={converter.from} onChange={e=>setConverter({...converter, from:e.target.value})}>
+                      {currencyList.map(c=><option key={c} value={c}>{c}</option>)}
+                   </select>
+                </div>
+                <div className="conv-arrow">⬇️ 轉換為 ⬇️</div>
+                <div className="conv-row">
+                   <div className="conv-result">{convertedResult}</div>
+                   <select value={converter.to} onChange={e=>setConverter({...converter, to:e.target.value})}>
+                      {currencyList.map(c=><option key={c} value={c}>{c}</option>)}
+                   </select>
+                </div>
+             </div>
+
+             <div className="expense-section">
+                <h3>💰 新增支出</h3>
+                <div className="exp-form">
+                   <input placeholder="消費項目" value={newExp.item} onChange={e=>setNewExp({...newExp, item:e.target.value})} />
+                   <div className="exp-row">
+                      <input type="number" placeholder="金額" value={newExp.amt} onChange={e=>setNewExp({...newExp, amt:e.target.value})} />
+                      <select value={newExp.curr} onChange={e=>setNewExp({...newExp, curr:e.target.value})}>
+                        {currencyList.map(c=><option key={c} value={c}>{c}</option>)}
+                      </select>
+                   </div>
+                   <button className="btn-save" onClick={addExpense}>記一筆</button>
+                </div>
+
+                <div className="exp-list">
+                  {expenses.map(ex => (
+                    <div key={ex.id} className="exp-item">
+                       <span>{ex.item}</span>
+                       <strong>{ex.amt} <small>{ex.curr}</small></strong>
+                    </div>
+                  ))}
+                </div>
+             </div>
           </div>
         )}
 
       </div>
+
+      {/* 底部導航列 */}
+      <div className="bottom-nav">
+         <button className={`nav-item ${activeTab==='schedule'?'active':''}`} onClick={()=>setActiveTab('schedule')}>
+           🗓️ 行程
+         </button>
+         <button className={`nav-item ${activeTab==='money'?'active':''}`} onClick={()=>setActiveTab('money')}>
+           🪙 錢包
+         </button>
+      </div>
+
     </div>
   );
 };
