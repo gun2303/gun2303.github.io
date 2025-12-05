@@ -1,174 +1,133 @@
-/* --- 1. 全域變數 & 基礎 --- */
+/* --- 沿用之前的基礎設定 --- */
 :root {
-  --primary-bg: #E3F2FD;       /* 雪地藍背景 */
-  --header-grad: linear-gradient(180deg, #A1C4FD 0%, #C2E9FB 100%);
+  --bg-color: #F0F4F8;
+  --primary-blue: #54A0FF;
+  --header-grad: linear-gradient(135deg, #A1C4FD 0%, #C2E9FB 100%);
   --card-white: #FFFFFF;
-  --card-blue: #1565C0;        /* 匯率卡片深藍 */
-  --btn-blue: #42A5F5;
-  --btn-yellow: #FBC02D;
-  --text-dark: #37474F;
-  --text-grey: #90A4AE;
-  --radius: 16px;
+  --text-dark: #2C3E50;
+  --text-grey: #8395A7;
+  --line-color: #D2DAE2;
 }
 
 body {
   margin: 0;
-  background-color: #f0f4f8;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background-color: #E1E8ED;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
 .mobile-wrapper {
   max-width: 480px;
   margin: 0 auto;
-  background-color: var(--primary-bg);
+  background-color: var(--bg-color);
   min-height: 100vh;
   position: relative;
-  padding-bottom: 20px;
+  padding-bottom: 80px;
+  overflow-x: hidden;
 }
 
-/* --- 2. 頂部 Hero 區塊 --- */
-.hero-section {
+/* --- Hero & Tabs --- */
+.hero-header {
   background: var(--header-grad);
-  padding: 60px 20px 80px 20px; /* 底部留白給懸浮按鈕 */
-  border-bottom-left-radius: 30px;
-  border-bottom-right-radius: 30px;
-  text-align: center;
-  position: relative;
-  box-shadow: 0 4px 20px rgba(161, 196, 253, 0.5);
+  padding: 40px 0 10px 0;
+  border-bottom-left-radius: 24px;
+  border-bottom-right-radius: 24px;
+  box-shadow: 0 4px 15px rgba(161, 196, 253, 0.4);
 }
-
 .hero-title {
-  display: block;
-  width: 100%;
-  background: transparent;
-  border: none;
-  font-size: 32px;
-  font-weight: 900;
-  color: #fff;
-  text-align: center;
-  text-shadow: 0 2px 5px rgba(0,0,0,0.1);
-  margin-bottom: 5px;
-  outline: none;
+  width: 100%; text-align: center; font-size: 28px; font-weight: 800; color: #FFF;
+  background: transparent; border: none; text-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px;
 }
-.hero-title:focus { border-bottom: 1px dashed rgba(255,255,255,0.5); }
+.date-tabs-container {
+  display: flex; overflow-x: auto; padding: 0 20px 15px 20px; gap: 12px; scrollbar-width: none;
+}
+.date-tabs-container::-webkit-scrollbar { display: none; }
+.date-tab {
+  flex: 0 0 auto; background: rgba(255,255,255,0.3); border: 1px solid rgba(255,255,255,0.5);
+  border-radius: 12px; padding: 8px 16px; color: #FFF; text-align: center; cursor: pointer; transition: all 0.2s;
+}
+.date-tab.active {
+  background: #FFF; color: var(--primary-blue); box-shadow: 0 4px 10px rgba(0,0,0,0.1); transform: translateY(-2px);
+}
+.date-tab .week { font-size: 12px; font-weight: bold; margin-bottom: 2px; }
+.date-tab .date { font-size: 16px; font-weight: 900; }
+.add-day { font-size: 24px; display: flex; align-items: center; }
 
-.hero-subtitle {
-  display: block;
-  width: 100%;
-  background: transparent;
-  border: none;
-  font-size: 16px;
-  color: rgba(255,255,255,0.9);
-  text-align: center;
-  letter-spacing: 1px;
-  outline: none;
+/* --- 內容卡片 --- */
+.content-body { padding: 20px; }
+.info-card {
+  background: var(--card-white); border-radius: 16px; padding: 16px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);
 }
 
-/* --- 3. 懸浮導航球 --- */
-.floating-nav {
-  position: absolute;
-  bottom: -28px;
-  left: 0; right: 0;
-  display: flex;
-  justify-content: center;
-  gap: 20px;
-}
+/* 標題列通用 (含標籤) */
+.card-label-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.card-label { font-size: 12px; font-weight: bold; color: var(--text-grey); letter-spacing: 1px; }
 
-.nav-btn {
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  border: none;
-  background: white;
-  font-size: 24px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-  cursor: pointer;
-  transition: all 0.2s;
-  display: flex; align-items: center; justify-content: center;
-}
+/* 天氣 */
+.weather-card { display: flex; justify-content: space-between; align-items: center; background: linear-gradient(135deg, #fff 0%, #f0f8ff 100%); }
+.wc-left { display: flex; align-items: center; gap: 15px; }
+.wc-icon { font-size: 32px; }
+.temp { font-size: 24px; font-weight: 800; color: var(--text-dark); }
+.low { font-size: 16px; color: var(--text-grey); font-weight: normal; }
+.feel { font-size: 12px; color: var(--text-grey); margin-top: 2px; }
+.wc-right { font-weight: bold; color: var(--primary-blue); background: #E1F5FE; padding: 4px 10px; border-radius: 20px; font-size: 12px; }
 
-.nav-btn.active {
-  background: var(--card-blue);
-  color: white; /* 這裡讓 emoji 變色可能不明顯，主要是背景變深 */
-  transform: translateY(-5px);
-  box-shadow: 0 8px 15px rgba(21, 101, 192, 0.3);
-}
+/* 航班 */
+.flight-card { border-left: 4px solid #54A0FF; }
+.flight-date-tag { background: #E1F5FE; color: #54A0FF; font-size: 11px; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
+.flight-main { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+.flight-code { font-size: 20px; font-weight: 900; color: var(--text-dark); }
+.flight-time { font-weight: bold; color: var(--primary-blue); }
+.flight-details { display: flex; gap: 15px; font-size: 14px; color: var(--text-dark); margin-bottom: 8px; align-items: center; }
+.flight-detail-item { display: flex; align-items: center; gap: 5px; }
+.icon-btn-sm { border: none; background: #EEE; width: 20px; height: 20px; border-radius: 50%; font-size: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center;}
+.note-text { font-size: 12px; color: var(--text-grey); background: #F7F9FA; padding: 6px; border-radius: 6px; }
 
-/* --- 4. 內容區塊與卡片 --- */
-.content-area { padding: 50px 20px 0 20px; }
+/* 住宿 */
+.hotel-card { border-left: 4px solid #FBC02D; }
+.hotel-date-tag { background: #FFF9C4; color: #FBC02D; font-size: 11px; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
+.hotel-name { font-size: 16px; font-weight: bold; margin-bottom: 8px; color: var(--text-dark); }
+.hotel-addr-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.hotel-addr { font-size: 13px; color: var(--text-grey); flex: 1; }
+.map-outline { background: white; border: 1px solid var(--primary-blue); color: var(--primary-blue); }
 
-.card {
-  background: var(--card-white);
-  border-radius: var(--radius);
-  padding: 16px;
-  margin-bottom: 16px;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.03);
-  position: relative;
-}
+/* 時間軸 */
+.timeline-container { margin-top: 10px; }
+.timeline-item { display: flex; position: relative; }
+.tl-time { width: 50px; font-size: 12px; font-weight: bold; color: var(--text-grey); text-align: right; padding-top: 20px; margin-right: 10px; }
+.tl-line-col { width: 20px; display: flex; flex-direction: column; align-items: center; position: relative; }
+.tl-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--primary-blue); border: 3px solid #E1F5FE; margin-top: 20px; z-index: 2; }
+.tl-dot.add { background: #FBC02D; color: white; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; font-size: 16px; margin-top: 10px; border: none; }
+.tl-line { flex: 1; width: 2px; background: var(--line-color); display: flex; align-items: center; justify-content: center; min-height: 60px; }
+.trans-badge { background: #FFF; border: 1px solid var(--line-color); padding: 4px 8px; border-radius: 12px; font-size: 10px; color: var(--text-dark); display: flex; flex-direction: column; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.05); z-index: 5; }
+.trans-min { color: var(--text-grey); font-size: 9px; margin-top: 2px; }
+.tl-content { flex: 1; padding: 10px 0 20px 10px; }
+.tl-card { background: white; padding: 12px; border-radius: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.03); }
+.tl-loc { font-size: 15px; font-weight: bold; color: var(--text-dark); margin-bottom: 8px; }
+.tl-actions { display: flex; gap: 8px; }
+.sm-btn { padding: 4px 10px; border-radius: 6px; border: none; font-size: 12px; cursor: pointer; }
+.sm-btn.map { background: #E1F5FE; color: var(--primary-blue); }
+.sm-btn.edit { background: #F5F5F5; color: var(--text-grey); }
+.btn-add-event { width: 100%; border: 2px dashed #ddd; background: none; padding: 10px; color: #aaa; border-radius: 12px; cursor: pointer; margin-top: 5px; }
 
-.fade-in { animation: fadeIn 0.4s ease; }
-@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+/* 匯率與記帳 */
+.currency-converter { background: var(--primary-blue); color: white; border-radius: 16px; padding: 20px; margin-bottom: 20px; }
+.currency-converter h3 { margin-top: 0; font-size: 16px; opacity: 0.9; }
+.conv-row { display: flex; gap: 10px; margin-bottom: 10px; }
+.conv-row input, .conv-row select, .conv-result { background: rgba(255,255,255,0.2); border: none; padding: 10px; border-radius: 8px; color: white; font-weight: bold; font-size: 16px; flex: 1; }
+.conv-row select { color: #333; background: white; flex: 0.5; }
+.conv-result { background: rgba(0,0,0,0.1); text-align: center; display:flex; align-items:center; justify-content:center;}
+.conv-arrow { text-align: center; font-size: 12px; opacity: 0.8; margin: 5px 0; }
 
-/* 行程卡片樣式 */
-.card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-.date-badge { display: flex; align-items: center; gap: 5px; }
-.input-date { font-size: 18px; font-weight: bold; color: var(--card-blue); width: 80px; border: none; background: transparent; }
-.week-label { background: #E3F2FD; color: var(--card-blue); padding: 2px 8px; border-radius: 10px; font-size: 12px; font-weight: bold; }
-.btn-delete-sm { border: none; background: #FFEBEE; color: #D32F2F; width: 24px; height: 24px; border-radius: 50%; cursor: pointer; font-weight: bold; }
+.exp-form { background: white; padding: 16px; border-radius: 16px; margin-bottom: 20px; }
+.exp-form input, .exp-form select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; margin-bottom: 10px; }
+.exp-row { display: flex; gap: 10px; }
+.btn-save { width: 100%; background: var(--text-dark); color: white; padding: 12px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
+.exp-item { display: flex; justify-content: space-between; padding: 12px; border-bottom: 1px solid #eee; background: white; }
 
-.card-body { margin-bottom: 12px; }
-.input-location { width: 100%; font-size: 16px; font-weight: bold; border: none; border-bottom: 1px solid #eee; padding: 5px 0; margin-bottom: 5px; color: var(--text-dark); outline: none; }
-.input-location:focus { border-color: var(--btn-blue); }
-.input-note { width: 100%; font-size: 13px; color: var(--text-grey); border: none; background: transparent; outline: none; }
+/* 底部導航 */
+.bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; max-width: 480px; margin: 0 auto; background: white; border-top: 1px solid #eee; display: flex; justify-content: space-around; padding: 10px 0; z-index: 100; }
+.nav-item { background: none; border: none; font-size: 12px; color: var(--text-grey); display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; }
+.nav-item.active { color: var(--primary-blue); font-weight: bold; }
 
-.card-actions { display: flex; gap: 10px; }
-.btn-action { flex: 1; border: none; border-radius: 8px; padding: 8px; color: white; font-size: 13px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px;}
-.btn-action.blue { background: var(--btn-blue); }
-.btn-action.yellow { background: var(--btn-yellow); color: #5D4037; }
-
-/* 懸浮新增按鈕 (FAB) */
-.fab-add {
-  position: fixed; bottom: 30px; right: 20px;
-  width: 60px; height: 60px;
-  background: var(--btn-yellow);
-  color: #5D4037;
-  font-size: 30px; border: none; border-radius: 50%;
-  box-shadow: 0 4px 15px rgba(251, 192, 45, 0.4);
-  cursor: pointer; display: flex; align-items: center; justify-content: center;
-}
-
-/* --- 5. 匯率與記帳樣式 --- */
-.exchange-card {
-  background: var(--card-blue);
-  color: white;
-  border-radius: 24px; padding: 24px;
-  margin-bottom: 20px;
-  box-shadow: 0 10px 20px rgba(21, 101, 192, 0.2);
-}
-.exchange-card h3 { margin: 0 0 15px 0; font-size: 16px; opacity: 0.9; }
-.ex-row { display: flex; align-items: center; gap: 10px; }
-.ex-row input { flex: 1; background: rgba(255,255,255,0.2); border: none; padding: 10px; border-radius: 10px; color: white; font-size: 20px; font-weight: bold; outline: none; }
-.ex-row input::placeholder { color: rgba(255,255,255,0.5); font-size: 14px; }
-.ex-result { flex: 1; background: rgba(255,255,255,0.1); padding: 10px; border-radius: 10px; text-align: right; font-size: 20px; font-weight: bold; }
-.arrow { font-size: 20px; opacity: 0.7; }
-
-/* 記帳表單 */
-.form-group { display: flex; gap: 10px; margin-bottom: 10px; }
-.form-group input, .form-group select {
-  padding: 10px; border: 1px solid #eee; border-radius: 8px;
-  background: #FAFAFA; outline: none; flex: 1;
-}
-.btn-full { width: 100%; padding: 12px; border: none; border-radius: 10px; font-weight: bold; cursor: pointer; color: white; }
-.btn-full.blue { background: var(--btn-blue); }
-.btn-full.dark { background: var(--text-dark); }
-
-/* 支出列表 */
-.expense-item { display: flex; justify-content: space-between; align-items: center; padding: 12px; background: white; border-radius: 12px; margin-bottom: 8px; border: 1px solid #f5f5f5; }
-.exp-tag { background: #E1F5FE; color: #0277BD; padding: 2px 6px; border-radius: 4px; font-size: 11px; margin-right: 8px; font-weight: bold; }
-.exp-name { font-size: 14px; font-weight: bold; color: var(--text-dark); }
-.exp-amount { font-size: 16px; font-weight: bold; color: var(--card-blue); margin-right: 10px; }
-.btn-del-text { background: none; border: none; color: #EF5350; font-size: 12px; cursor: pointer; }
-
-/* --- 6. 工具 Tab --- */
-.trans-row { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 15px; background: #F5F5F5; padding: 10px; border-radius: 12px; }
-.trans-row select { background: transparent; border: none; font-size: 16px; font-weight: bold; color: var(--text-dark); }
+.fade-in { animation: fadeIn 0.3s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
